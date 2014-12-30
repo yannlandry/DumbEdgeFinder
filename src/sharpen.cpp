@@ -1,4 +1,4 @@
-#include "edges.hpp"
+#include "sharpen.hpp"
 #include <opencv2/imgproc/imgproc.hpp>
 
 void sharpen(const cv::Mat& input, cv::Mat& output) {

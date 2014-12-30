@@ -2,7 +2,6 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include "edges.hpp"
-#include "sharpen.hpp"
 
 int main(int argc, char* argv[]) {
 	if(argc < 2) {
