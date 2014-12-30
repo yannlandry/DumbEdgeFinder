@@ -3,11 +3,21 @@
 #include <numeric>
 #include "sharpen.hpp"
 
+#define MAXDISTANCE 441.67
+
+struct Closer {
+	const cv::Vec3b* base;
+	Closer(): base(nullptr) {}
+	bool operator()(const cv::Vec3b* A, const cv::Vec3b* B)
+		{ return edist(*base, *A) < edist(*base, *B); }
+} closer;
+
 void findEdges(const cv::Mat& input, cv::Mat& output) {
 	cv::Mat sharpened(input.size(), input.depth());
 	sharpen(input, sharpened);
-
 	output.create(sharpened.size(), CV_32F);
+
+	const cv::Vec3b white{255,255,255};
 
 	for(int row = 1; row < sharpened.rows - 1; ++row) {
 		// rows involved in distance measurement
@@ -16,24 +26,36 @@ void findEdges(const cv::Mat& input, cv::Mat& output) {
 		const cv::Vec3b* nextRow = sharpened.ptr<cv::Vec3b>(row + 1);
 		float* outputRow = output.ptr<float>(row);
 
-		// euclidean distances to the colors of neighboring pixels
-		float distances[8]{};
+		// map neighboring pixels
+		const cv::Vec3b* neighbors[8]{};
 
 		// calculate the color of each pixel
 		for(int col = 1; col < sharpened.cols - 1; ++col) {
-			distances[0] = edist(currentRow[col], previousRow[col - 1]);
-			distances[1] = edist(currentRow[col], previousRow[col]);
-			distances[2] = edist(currentRow[col], previousRow[col + 1]);
-			distances[3] = edist(currentRow[col], currentRow[col - 1]);
-			distances[4] = edist(currentRow[col], currentRow[col + 1]);
-			distances[5] = edist(currentRow[col], nextRow[col - 1]);
-			distances[6] = edist(currentRow[col], nextRow[col]);
-			distances[7] = edist(currentRow[col], nextRow[col + 1]);
+			neighbors[0] = &previousRow[col - 1];
+			neighbors[1] = &previousRow[col];
+			neighbors[2] = &previousRow[col + 1];
+			neighbors[3] = &currentRow[col - 1];
+			neighbors[4] = &currentRow[col + 1];
+			neighbors[5] = &nextRow[col - 1];
+			neighbors[6] = &nextRow[col];
+			neighbors[7] = &nextRow[col + 1];
 
 			// sort to get the greatest differences
-			std::sort(distances, distances+8);
+			closer.base = &currentRow[col];
+			std::sort(neighbors, neighbors+8, closer);
 
-			outputRow[col] = std::log10(12 * std::accumulate(distances+4, distances+8, 0) / 4.0 / 441.67 - 2); // 441.67 -> max distance between 2 colors
+			// are 3 of the 4 border pixels brighter?
+			int brighter = 0;
+			for(int i = 4; i < 8; ++i)
+				if(edist(currentRow[i], white) - edist(*neighbors[i], white) > 0)
+					++brighter;
+
+			// if 3 pixels are brighter, color
+			if(brighter >= 3)
+				outputRow[col] = std::log10(12 *
+					( edist(currentRow[col], *neighbors[4]) + edist(currentRow[col], *neighbors[5])
+					+ edist(currentRow[col], *neighbors[6]) + edist(currentRow[col], *neighbors[7]) )
+						/ 4.0 / MAXDISTANCE - 2 );
 		}
 	}
 }
